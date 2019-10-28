@@ -150,6 +150,8 @@
     var cubeVertexIndexBuffer;
     var ballVertexPositionBuffer;
     var ballVertexColorBuffer;
+    var ballVertexNormalBuffer;
+    var ballVertexIndexBuffer;
 
     function initBuffers() {
         pyramidVertexPositionBuffer = gl.createBuffer();
@@ -287,6 +289,11 @@
         cubeVertexIndexBuffer.itemSize = 1;
         cubeVertexIndexBuffer.numItems = 36;
 
+        
+        var latitudeBands = 30;
+        var longitudeBands = 30;
+        var radius = 2;
+
         ballVertexPositionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexPositionBuffer);
         vertices = [0.0,  0.0];       
@@ -359,8 +366,17 @@
         gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, ballVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexColorBuffer);
         gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, ballVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        
+
+        /*gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexNormalBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, moonVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
+    setMatrixUniforms();
+    gl.drawElements(gl.TRIANGLES, moonVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);*/
+
         setMatrixUniforms();
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, ballVertexPositionBuffer.numItems);
+        gl.drawArrays(gl.TRIANGLE_FAN, ballVertexPositionBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 
     }
 
