@@ -19,10 +19,12 @@
 
 <script id="shader-vs" type="x-shader/x-vertex">
     attribute vec3 aVertexPosition;
+    attribute vec3 aVertexNormal;
     attribute vec4 aVertexColor;
 
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
+    uniform mat3 uNMatrix;
 
     varying vec4 vColor;
 
@@ -30,6 +32,7 @@
         gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
         vColor = aVertexColor;
     }
+
 </script>
 
 
@@ -39,7 +42,7 @@
 
     function initGL(canvas) {
         try {
-            gl = canvas.getContext("experimental-webgl");
+            gl = canvas.getContext("webgl");
             gl.viewportWidth = canvas.width;
             gl.viewportHeight = canvas.height;
         } catch (e) {
@@ -109,10 +112,13 @@
         shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
         gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);
 
+        shaderProgram.vertexNormalAttribute = gl.getAttribLocation(shaderProgram, "aVertexNormal");
+        gl.enableVertexAttribArray(shaderProgram.vertexNormalAttribute);
+
         shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
         shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+        shaderProgram.nMatrixUniform = gl.getUniformLocation(shaderProgram, "uNMatrix");
     }
-
 
     var mvMatrix = mat4.create();
     var mvMatrixStack = [];
@@ -131,15 +137,60 @@
         mvMatrix = mvMatrixStack.pop();
     }
 
-
     function setMatrixUniforms() {
         gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
         gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+
+        var normalMatrix = mat3.create();
+        mat4.toInverseMat3(mvMatrix, normalMatrix);
+        mat3.transpose(normalMatrix);
+        gl.uniformMatrix3fv(shaderProgram.nMatrixUniform, false, normalMatrix);
     }
 
 
     function degToRad(degrees) {
         return degrees * Math.PI / 180;
+    }
+
+
+    var mouseDown = false;
+    var lastMouseX = null;
+    var lastMouseY = null;
+
+    var ballRotationMatrix = mat4.create();
+    mat4.identity(ballRotationMatrix);
+
+    function handleMouseDown(event) {
+        mouseDown = true;
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+    }
+
+
+    function handleMouseUp(event) {
+        mouseDown = false;
+    }
+
+
+    function handleMouseMove(event) {
+        if (!mouseDown) {
+            return;
+        }
+        var newX = event.clientX;
+        var newY = event.clientY;
+
+        var deltaX = newX - lastMouseX
+        var newRotationMatrix = mat4.create();
+        mat4.identity(newRotationMatrix);
+        mat4.rotate(newRotationMatrix, degToRad(deltaX / 10), [0, 1, 0]);
+
+        var deltaY = newY - lastMouseY;
+        mat4.rotate(newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]);
+
+        mat4.multiply(newRotationMatrix, ballRotationMatrix, ballRotationMatrix);
+
+        lastMouseX = newX
+        lastMouseY = newY;
     }
 
 
@@ -149,8 +200,8 @@
     var cubeVertexColorBuffer;
     var cubeVertexIndexBuffer;
     var ballVertexPositionBuffer;
-    var ballVertexColorBuffer;
     var ballVertexNormalBuffer;
+    var ballVertexColordBuffer;
     var ballVertexIndexBuffer;
 
     function initBuffers() {
@@ -289,36 +340,87 @@
         cubeVertexIndexBuffer.itemSize = 1;
         cubeVertexIndexBuffer.numItems = 36;
 
-        
+
         var latitudeBands = 30;
         var longitudeBands = 30;
         var radius = 2;
 
-        ballVertexPositionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexPositionBuffer);
-        vertices = [0.0,  0.0];       
-        for (i = 0; i <= 100; i++){
-            vertices.push(Math.cos(i*2*Math.PI/100))
-            vertices.push(Math.sin(i*2*Math.PI/100));
+        var vertexPositionData = [];
+        var normalData = [];
+        for (var latNumber=0; latNumber <= latitudeBands; latNumber++) {
+            var theta = latNumber * Math.PI / latitudeBands;
+            var sinTheta = Math.sin(theta);
+            var cosTheta = Math.cos(theta);
+
+            for (var longNumber=0; longNumber <= longitudeBands; longNumber++) {
+                var phi = longNumber * 2 * Math.PI / longitudeBands;
+                var sinPhi = Math.sin(phi);
+                var cosPhi = Math.cos(phi);
+
+                var x = cosPhi * sinTheta;
+                var y = cosTheta;
+                var z = sinPhi * sinTheta;
+                var u = 1 - (longNumber / longitudeBands);
+                var v = 1 - (latNumber / latitudeBands);
+
+                normalData.push(x);
+                normalData.push(y);
+                normalData.push(z);  
+                // textureCoordData.push(u);
+                // textureCoordData.push(v);
+                vertexPositionData.push(radius * x);
+                vertexPositionData.push(radius * y);
+                vertexPositionData.push(radius * z);
+            }
         }
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-        ballVertexPositionBuffer.itemSize = 2;
-        ballVertexPositionBuffer.numItems = 102;
+
+        var indexData = [];
+        for (var latNumber=0; latNumber < latitudeBands; latNumber++) {
+            for (var longNumber=0; longNumber < longitudeBands; longNumber++) {
+                var first = (latNumber * (longitudeBands + 1)) + longNumber;
+                var second = first + longitudeBands + 1;
+                indexData.push(first);
+                indexData.push(second);
+                indexData.push(first + 1);
+
+                indexData.push(second);
+                indexData.push(second + 1);
+                indexData.push(first + 1);
+            }
+        }
+
+        ballVertexNormalBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalData), gl.STATIC_DRAW);
+        ballVertexNormalBuffer.itemSize = 3;
+        ballVertexNormalBuffer.numItems = normalData.length / 3;
 
         ballVertexColorBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexColorBuffer);
         colors = [];
-        for (var i=0; i < 102; i++) {
+        for (var i=0; i < normalData.length / 3; i++) {
             colors = colors.concat([1.0, 0.0, 0.0, 1.0]);
         }
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
         ballVertexColorBuffer.itemSize = 4;
-        ballVertexColorBuffer.numItems = 102;
+        ballVertexColorBuffer.numItems = normalData.length / 3;
+
+        ballVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositionData), gl.STATIC_DRAW);
+        ballVertexPositionBuffer.itemSize = 3;
+        ballVertexPositionBuffer.numItems = vertexPositionData.length / 3;
+
+        ballVertexIndexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ballVertexIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indexData), gl.STATIC_DRAW);
+        ballVertexIndexBuffer.itemSize = 1;
+        ballVertexIndexBuffer.numItems = indexData.length;
     }
 
 
+    var rPyramid = 0;
     var rCube = 0;
-
     function drawScene() {
         gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -327,25 +429,8 @@
 
         mat4.identity(mvMatrix);
 
-        mat4.translate(mvMatrix, [-1.5, 0.0, -8.0]);
 
-        /*mvPushMatrix();
-        mat4.rotate(mvMatrix, degToRad(rPyramid), [0, 1, 0]);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, pyramidVertexPositionBuffer);
-        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, pyramidVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, pyramidVertexColorBuffer);
-        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, pyramidVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        setMatrixUniforms();
-        gl.drawArrays(gl.TRIANGLES, 0, pyramidVertexPositionBuffer.numItems);
-
-        mvPopMatrix();
-
-
-        mat4.translate(mvMatrix, [2.0, 0.0, -8.0]);*/
-
+        mat4.translate(mvMatrix, [-3, 0.0, -8.0]);
         mvPushMatrix();
         mat4.rotate(mvMatrix, degToRad(rCube), [1, 1, 1]);
 
@@ -361,46 +446,61 @@
         mvPopMatrix();
 
 
-        mat4.translate(mvMatrix, [-2.5, 1.0, 0.0]);
+        mat4.translate(mvMatrix, [5, 1.0, -5.0]);
+
+        // mat4.translate(mvMatrix, [0, 0, -6]);
+
+        mat4.multiply(mvMatrix, ballRotationMatrix);
+
+        gl.uniform1i(shaderProgram.samplerUniform, 0);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexPositionBuffer);
         gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, ballVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
         gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexColorBuffer);
         gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, ballVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
-        
 
-        /*gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexNormalBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, moonVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, ballVertexNormalBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, ballVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
-    setMatrixUniforms();
-    gl.drawElements(gl.TRIANGLES, moonVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);*/
-
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ballVertexIndexBuffer);
         setMatrixUniforms();
-        gl.drawArrays(gl.TRIANGLE_FAN, ballVertexPositionBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, ballVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    }
 
+
+    function tick() {
+        requestAnimFrame(tick);
+        drawScene();
     }
 
 
     function webGLStart() {
-        var canvas = document.getElementById("lab1");
+        var canvas = document.getElementById("lab2");
         initGL(canvas);
-        initShaders()
+        initShaders();
         initBuffers();
 
         gl.clearColor(0.4, 0.4, 0.4, 1.0);
         gl.enable(gl.DEPTH_TEST);
 
-        drawScene();
+        canvas.onmousedown = handleMouseDown;
+        document.onmouseup = handleMouseUp;
+        document.onmousemove = handleMouseMove;
+
+        tick();
     }
 
 </script>
+
+
 </head>
 
 
 <body onload="webGLStart();">
-     <p> Lab 2</p>
+    <p> Lab 2</p>
 
-    <canvas id="lab1" style="border: none;" width="700" height="500"></canvas>
+    <canvas id="lab2" style="border: none;" width="700" height="500"></canvas>
 </body>
 
 </html>
