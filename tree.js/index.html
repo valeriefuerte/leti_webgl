@@ -91,29 +91,6 @@
 			return PCF_Filter( shadowMap, uv, zReceiver, filterRadius );
 		}
 	</script>
-
-<!-- 	<script type="x-shader/x-vertex" id="vertexshader">
-		attribute float visible;
-		varying float vVisible;
-		attribute vec3 vertColor;
-		varying vec3 vColor;
-		void main() {
-			vColor = vertColor;
-			vVisible = visible;
-			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-		}
-	</script>
-	<script type="x-shader/x-fragment" id="fragmentshader">
-		varying float vVisible;
-		varying vec3 vColor;
-		void main() {
-			if ( vVisible > 0.0 ) {
-				gl_FragColor = vec4( vColor, 1.0 );
-			} else {
-				discard;
-			}
-		}
-	</script> -->
 </head>
 
 <body>
@@ -178,7 +155,6 @@ function init()
 	var floorGeometry = new THREE.PlaneGeometry(2000,2000);
 	var floorMaterial = new THREE.MeshBasicMaterial({color: 0x009933, side: THREE.DoubleSide});
 	var floor = new THREE.Mesh(floorGeometry, floorMaterial);
-	//floor.position.y = -0.5;
 	floor.rotation.x = Math.PI / 2;
 	floor.position.set(0,-50,0);
 	floor.receiveShadow = true;
@@ -294,7 +270,6 @@ function init()
 		points.push( new THREE.Vector2( Math.sin( i * 0.2 ) * 10 + 5, ( i - 5 ) * 2 ) );
 	}
 	var geometry1 = new THREE.LatheGeometry( points );
-	// material = new THREE.MeshLambertMaterial( { map: texture } );
 	var lathe = new THREE.Mesh( geometry1, material );
 	lathe.position.set(-50,50,350)
 	scene.add( lathe );
